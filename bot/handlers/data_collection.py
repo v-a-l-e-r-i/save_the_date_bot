@@ -45,6 +45,16 @@ async def on_phone_text(message: Message, state: FSMContext, session: AsyncSessi
 async def on_company(message: Message, state: FSMContext, session: AsyncSession):
     guest = await get_guest_by_chat_id(session, message.chat.id)
     guest.company = message.text.strip()
+    await session.commit()
+
+    await message.answer(TEXTS["ask_position"])
+    await state.set_state(GuestForm.waiting_position)
+
+
+@router.message(GuestForm.waiting_position)
+async def on_position(message: Message, state: FSMContext, session: AsyncSession):
+    guest = await get_guest_by_chat_id(session, message.chat.id)
+    guest.position = message.text.strip()
     guest.status = Status.CONFIRMED.value
     await session.commit()
 
