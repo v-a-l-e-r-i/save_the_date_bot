@@ -1,0 +1,6 @@
+data/bot.db
+data/*.xlsx
+.env
+__pycache__/
+*.pyc
+.venv/
