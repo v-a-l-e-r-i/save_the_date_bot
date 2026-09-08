@@ -9,7 +9,6 @@ from bot.config import TEXTS, DATE_KEY_TO_ISO
 from bot.db import get_guest_by_chat_id, Status
 from bot.keyboards import date_selection_kb, change_date_kb, confirm_prefilled_kb
 from bot.states import GuestForm
-
 from bot.utils import smart_edit
 
 router = Router(name="date_selection")
@@ -37,7 +36,7 @@ async def on_date_chosen(callback: CallbackQuery, session: AsyncSession, state: 
         text = confirm_text + "\n\n" + TEXTS["confirm_prefilled"].format(
             name=guest.full_name or "—", phone=guest.phone or "—", company=guest.company or "—"
         )
-        await smart_edit(callback.message,text, reply_markup=confirm_prefilled_kb())
+        await smart_edit(callback.message, text, reply_markup=confirm_prefilled_kb())
         await callback.answer()
         return
 
@@ -45,13 +44,13 @@ async def on_date_chosen(callback: CallbackQuery, session: AsyncSession, state: 
         # already have everything (e.g. user is re-picking a date after already onboarding)
         guest.status = Status.CONFIRMED.value
         await session.commit()
-        await smart_edit(callback.message,confirm_text, reply_markup=change_date_kb())
+        await smart_edit(callback.message, confirm_text, reply_markup=change_date_kb())
         await callback.answer()
         return
 
     guest.status = Status.PENDING.value
     await session.commit()
-    await smart_edit(callback.message,confirm_text)
+    await smart_edit(callback.message, confirm_text)
     await callback.message.answer(TEXTS["ask_name"])
     await state.set_state(GuestForm.waiting_name)
     await callback.answer()
@@ -69,7 +68,7 @@ async def on_prefill_confirmed(callback: CallbackQuery, session: AsyncSession):
     if guest:
         guest.status = Status.CONFIRMED.value
         await session.commit()
-    await smart_edit(callback.message,TEXTS["data_saved"], reply_markup=change_date_kb())
+    await smart_edit(callback.message, TEXTS["data_saved"], reply_markup=change_date_kb())
     await callback.answer()
 
 
