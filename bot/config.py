@@ -29,6 +29,7 @@ class Settings:
     SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", 10))
     SCHEDULER_MINUTE: int = int(os.getenv("SCHEDULER_MINUTE", 0))
 
+    BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
     SMTP_USER: str = os.getenv("SMTP_USER", "")
