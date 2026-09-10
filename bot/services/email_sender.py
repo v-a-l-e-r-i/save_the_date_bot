@@ -1,58 +1,60 @@
-import smtplib
-import socket
-from email.message import EmailMessage
-from pathlib import Path
+"""
+Надсилання звіту через Brevo HTTP API (https://api.brevo.com), а не SMTP.
+
+Чому не SMTP: багато хмарних платформ (у т.ч. Railway) блокують вихідний
+трафік на SMTP-порти (25/465/587), щоб їх не використовували для спаму.
+Спроба з'єднання просто висить і падає по timeout. HTTP API працює на
+порту 443 (звичайний https), який ніхто не блокує.
+
+Налаштування (безкоштовно):
+1. Зареєструватись на https://app.brevo.com
+2. Settings -> Senders, Domains & Dedicated IPs -> Senders -> додати й
+   підтвердити email, з якого надсилатимуться листи (лист з посиланням
+   підтвердження прийде на цю ж адресу).
+3. Settings -> SMTP & API -> API Keys -> створити ключ, вставити у
+   BREVO_API_KEY в .env.
+"""
+import base64
+import requests
 
 from bot.config import settings
 
-
-def _resolve_ipv4(host: str) -> str:
-    """Force IPv4 resolution.
-
-    Some hosting providers (e.g. Railway) don't route IPv6 egress traffic,
-    but SMTP hostnames like smtp.gmail.com resolve to both A and AAAA
-    records. smtplib may pick the IPv6 address and fail with
-    'Network is unreachable'. Resolving to an IPv4 address explicitly avoids
-    that.
-    """
-    try:
-        return socket.getaddrinfo(host, None, socket.AF_INET)[0][4][0]
-    except socket.gaierror:
-        return host  # fall back to the original host if IPv4 lookup fails
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 def send_report_email(file_path: str, subject: str = "Save the Date — звіт по гостях") -> None:
-    if not settings.SMTP_HOST or not settings.REPORT_EMAIL_TO:
+    if not settings.BREVO_API_KEY or not settings.REPORT_EMAIL_TO or not settings.SMTP_USER:
         raise RuntimeError(
-            "SMTP не налаштовано: перевірте SMTP_HOST/SMTP_USER/SMTP_PASSWORD/REPORT_EMAIL_TO у .env"
+            "Email не налаштовано: перевірте BREVO_API_KEY, SMTP_USER (підтверджений "
+            "відправник) і REPORT_EMAIL_TO у .env"
         )
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = settings.SMTP_USER
-    msg["To"] = settings.REPORT_EMAIL_TO
-    msg.set_content("У додатку — актуальний звіт по гостях виставки.")
+    with open(file_path, "rb") as f:
+        content_b64 = base64.b64encode(f.read()).decode()
 
-    data = Path(file_path).read_bytes()
-    msg.add_attachment(
-        data,
-        maintype="application",
-        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=Path(file_path).name,
+    payload = {
+        "sender": {"email": settings.SMTP_USER},
+        "to": [{"email": settings.REPORT_EMAIL_TO}],
+        "subject": subject,
+        "htmlContent": "<p>У додатку — актуальний звіт по гостях виставки.</p>",
+        "attachment": [
+            {
+                "content": content_b64,
+                "name": file_path.split("/")[-1],
+            }
+        ],
+    }
+
+    response = requests.post(
+        BREVO_API_URL,
+        json=payload,
+        headers={
+            "api-key": settings.BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        timeout=20,
     )
 
-    ipv4_host = _resolve_ipv4(settings.SMTP_HOST)
-
-    server = smtplib.SMTP(ipv4_host, settings.SMTP_PORT, timeout=20)
-    try:
-        # Connected via a raw IPv4 address to dodge Railway's missing IPv6
-        # route, but the TLS certificate is issued for the hostname — tell
-        # smtplib to verify against the real hostname, not the IP.
-        server._host = settings.SMTP_HOST
-        server.ehlo(settings.SMTP_HOST)
-        server.starttls()
-        server.ehlo(settings.SMTP_HOST)
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        server.send_message(msg)
-    finally:
-        server.quit()
+    if response.status_code >= 300:
+        raise RuntimeError(f"Brevo API помилка {response.status_code}: {response.text}")
