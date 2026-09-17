@@ -2,13 +2,14 @@ import logging
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import select
 
-from bot.config import settings, DATE_KEY_TO_ISO
+from bot.config import settings, DATE_KEY_TO_ISO, ISO_TO_DATE_LABEL
 from bot.db import async_session, Guest, Status
 from bot.services.messaging import send_reminder
 from bot.services.excel_export import build_report
@@ -16,54 +17,76 @@ from bot.services.email_sender import send_report_email
 
 logger = logging.getLogger("save_the_date.scheduler")
 
-# earliest exhibition date, used for the "1 week before event" reminder
 _EVENT_START = min(DATE_KEY_TO_ISO.values()) if DATE_KEY_TO_ISO else None
 
 
 async def _run_reminders(bot: Bot):
     now = datetime.utcnow()
+    today = datetime.now(ZoneInfo(settings.TIMEZONE)).date()
+
     async with async_session() as session:
-        result = await session.execute(
+        no_date_result = await session.execute(
             select(Guest).where(
                 Guest.chat_id.is_not(None),
-                Guest.status.in_([Status.INVITED.value, Status.PENDING.value]),
+                Guest.invited_at.is_not(None),
+                Guest.chosen_date.is_(None),
             )
         )
-        guests = list(result.scalars().all())
+        no_date_guests = list(no_date_result.scalars().all())
 
-        event_start = (
-            datetime.fromisoformat(_EVENT_START) if _EVENT_START else None
-        )
-
-        for guest in guests:
-            # Reminder 1: N days after invite, only once
+        for guest in no_date_guests:
             if (
-                guest.invited_at
-                and guest.reminder_1_sent_at is None
+                guest.reminder_1_sent_at is None
                 and now - guest.invited_at >= timedelta(days=settings.REMINDER_1_DAYS_AFTER_INVITE)
             ):
                 ok = await send_reminder(bot, guest, "reminder_1")
                 if ok:
                     guest.reminder_1_sent_at = now
 
-            # Reminder 2: N days before the event, only once
+        confirmed_result = await session.execute(
+            select(Guest).where(
+                Guest.chat_id.is_not(None),
+                Guest.status == Status.CONFIRMED.value,
+                Guest.chosen_date.is_not(None),
+            )
+        )
+        confirmed_guests = list(confirmed_result.scalars().all())
+
+        for guest in confirmed_guests:
+            days_until = (guest.chosen_date - today).days
             if (
-                event_start
-                and guest.reminder_2_sent_at is None
-                and event_start - now <= timedelta(days=settings.REMINDER_2_DAYS_BEFORE_EVENT)
-                and event_start > now
+                guest.reminder_2_sent_at is None
+                and days_until == settings.REMINDER_2_DAYS_BEFORE_EVENT
             ):
-                ok = await send_reminder(bot, guest, "reminder_2")
+                date_label = ISO_TO_DATE_LABEL.get(
+                    guest.chosen_date.isoformat(),
+                    guest.chosen_date.strftime("%d.%m.%Y"),
+                )
+                ok = await send_reminder(
+                    bot,
+                    guest,
+                    "reminder_2",
+                    format_kwargs={"date": date_label},
+                    with_date_buttons=False,
+                )
                 if ok:
                     guest.reminder_2_sent_at = now
 
-            # Mark as no_response for reporting once the event has effectively passed
-            # and the guest still hasn't confirmed (kept simple: just past reminder_2 window)
-            if event_start and now > event_start and guest.status != Status.CONFIRMED.value:
+        event_start = datetime.fromisoformat(_EVENT_START) if _EVENT_START else None
+        if event_start and now > event_start:
+            stale_result = await session.execute(
+                select(Guest).where(Guest.status != Status.CONFIRMED.value)
+            )
+            for guest in stale_result.scalars().all():
                 guest.status = Status.NO_RESPONSE.value
 
         await session.commit()
-    logger.info("Reminder run complete: %d guests checked", len(guests))
+
+    logger.info(
+        "Reminder run complete: %d without date, %d confirmed",
+        len(no_date_guests),
+        len(confirmed_guests),
+    )
 
 
 async def _run_daily_report():

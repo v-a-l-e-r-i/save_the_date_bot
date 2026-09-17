@@ -48,8 +48,8 @@ python main.py
 
 ## Нагадування
 Автоматично, раз на день о `SCHEDULER_HOUR:SCHEDULER_MINUTE` (Europe/Kyiv):
-- через `REMINDER_1_DAYS_AFTER_INVITE` днів після запрошення — тим, хто не відповів
-- за `REMINDER_2_DAYS_BEFORE_EVENT` днів до першої дати виставки — тим, хто не підтвердив
+- через `REMINDER_1_DAYS_AFTER_INVITE` днів після запрошення — тим, хто ще не обрав дату
+- за `REMINDER_2_DAYS_BEFORE_EVENT` днів до обраної дати візиту — зареєстрованим гостям (статус `confirmed`)
 - після дати виставки гостям без підтвердження виставляється статус `no_response` для звітності
 
 Щоденний авто-звіт на email вмикається `DAILY_AUTO_REPORT=true` в `.env`.

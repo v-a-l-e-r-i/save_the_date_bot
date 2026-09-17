@@ -25,7 +25,7 @@ class Settings:
     TIMEZONE: str = os.getenv("EXHIBITION_TIMEZONE", "Europe/Kyiv")
 
     REMINDER_1_DAYS_AFTER_INVITE: int = int(os.getenv("REMINDER_1_DAYS_AFTER_INVITE", 14))
-    REMINDER_2_DAYS_BEFORE_EVENT: int = int(os.getenv("REMINDER_2_DAYS_BEFORE_EVENT", 7))
+    REMINDER_2_DAYS_BEFORE_EVENT: int = int(os.getenv("REMINDER_2_DAYS_BEFORE_EVENT", 5))
     SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", 10))
     SCHEDULER_MINUTE: int = int(os.getenv("SCHEDULER_MINUTE", 0))
 
@@ -46,4 +46,7 @@ with open(BASE_DIR / "texts.yaml", "r", encoding="utf-8") as f:
 # date_key ("1"/"2"/"3") -> actual date string from .env, in the same order as texts.yaml buttons
 DATE_KEY_TO_ISO = {
     str(i + 1): d.strip() for i, d in enumerate(settings.EXHIBITION_DATES)
+}
+ISO_TO_DATE_LABEL = {
+    iso: TEXTS["date_buttons"][key] for key, iso in DATE_KEY_TO_ISO.items()
 }

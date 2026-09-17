@@ -47,11 +47,23 @@ async def send_save_the_date(bot: Bot, guest: Guest) -> bool:
         return False
 
 
-async def send_reminder(bot: Bot, guest: Guest, text_key: str) -> bool:
+async def send_reminder(
+    bot: Bot,
+    guest: Guest,
+    text_key: str,
+    *,
+    format_kwargs: dict | None = None,
+    with_date_buttons: bool = True,
+) -> bool:
     from bot.keyboards import date_selection_kb
 
+    text = TEXTS[text_key]
+    if format_kwargs:
+        text = text.format(**format_kwargs)
+    reply_markup = date_selection_kb() if with_date_buttons else None
+
     try:
-        await bot.send_message(guest.chat_id, TEXTS[text_key], reply_markup=date_selection_kb())
+        await bot.send_message(guest.chat_id, text, reply_markup=reply_markup)
         guest.last_delivery_error = None
         return True
     except (TelegramForbiddenError, TelegramNotFound, TelegramBadRequest) as e:
