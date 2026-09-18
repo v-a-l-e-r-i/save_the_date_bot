@@ -18,7 +18,7 @@ async def export_personal_links(session: AsyncSession, out_path: str) -> int:
     ws.append(["full_name", "phone", "company", "position", "personal_link"])
 
     for g in guests:
-        link = f"https://t.me/steiner_save_the_date_bot?start={g.start_code}"
+        link = f"https://t.me/steiner_save_the_date_bot"
         ws.append([g.full_name or "", g.phone or "", g.company or "", g.position or "", link])
 
     wb.save(out_path)
