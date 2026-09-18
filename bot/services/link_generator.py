@@ -7,7 +7,7 @@ from bot.db import Guest
 
 
 async def export_personal_links(session: AsyncSession, out_path: str) -> int:
-    """Exports an Excel file with a personal t.me/Bot?start=code link for every
+    """Exports an Excel file with a personal https://t.me/steiner_save_the_date_bot?start=code link for every
     guest imported without a chat_id (variant B). Returns the number of links written."""
     result = await session.execute(select(Guest).where(Guest.start_code.is_not(None)))
     guests = list(result.scalars().all())
@@ -18,7 +18,7 @@ async def export_personal_links(session: AsyncSession, out_path: str) -> int:
     ws.append(["full_name", "phone", "company", "position", "personal_link"])
 
     for g in guests:
-        link = f"https://t.me/{settings.BOT_USERNAME}?start={g.start_code}"
+        link = f"https://t.me/steiner_save_the_date_bot?start={g.start_code}"
         ws.append([g.full_name or "", g.phone or "", g.company or "", g.position or "", link])
 
     wb.save(out_path)
